@@ -126,13 +126,19 @@
   function teamTotal(team) {
     var played = 0;
     var total = 0;
+    var sumRuns = 0, sumWickets = 0, sumOppRuns = 0, sumOppWickets = 0;
     team.matches.forEach(function (match) {
       var diff = matchDiff(match);
       if (diff === null) return;
       played += 1;
       total += diff;
+      sumRuns += Number(match.runs);
+      sumWickets += Number(match.wickets);
+      sumOppRuns += Number(match.oppRuns);
+      sumOppWickets += Number(match.oppWickets);
     });
-    return { played: played, total: total };
+    var avg = played > 0 ? rw(sumRuns, sumWickets) - rw(sumOppRuns, sumOppWickets) : null;
+    return { played: played, total: total, avg: avg };
   }
 
   // ---- Full render (structural changes: add/remove match, reset, first load) ----
@@ -414,7 +420,7 @@
   function renderResults() {
     var rows = state.teams.map(function (team) {
       var t = teamTotal(team);
-      return { team: team, played: t.played, total: t.total };
+      return { team: team, played: t.played, total: t.total, avg: t.avg };
     });
     rows.sort(function (a, b) {
       return b.total - a.total;
@@ -428,13 +434,12 @@
     var tbody = document.createElement("tbody");
     rows.forEach(function (row) {
       var tr = document.createElement("tr");
-      var avg = row.played > 0 ? row.total / row.played : null;
       var cls = row.played === 0 ? "" : (row.total >= 0 ? "positive" : "negative");
       tr.innerHTML =
         "<td>" + escapeHtml(row.team.name) + "</td>" +
         "<td class=\"num\">" + row.played + "</td>" +
         "<td class=\"num " + cls + "\">" + (row.played > 0 ? formatSigned(row.total, 2) : "-") + "</td>" +
-        "<td class=\"num " + cls + "\">" + (avg !== null ? formatSigned(avg, 2) : "-") + "</td>";
+        "<td class=\"num " + cls + "\">" + (row.avg !== null ? formatSigned(row.avg, 2) : "-") + "</td>";
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);

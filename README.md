@@ -20,9 +20,15 @@ Differential = 100.00 - 9.00 = +91.00
 If a side lost 0 wickets, the divisor is treated as 1 (rather than being
 undefined), so `100/0` is scored the same as `100/1`.
 
-The aggregate table sums each team's differential across every match it
-has logged, along with matches played and average R/W differential per
-match.
+The aggregate table shows, per team:
+
+- **Total R/W** — the sum of that team's per-match differentials.
+- **Avg R/W** — the *aggregate* rate: total runs scored ÷ total wickets
+  lost across all of that team's matches, minus the opponents' total runs
+  ÷ total wickets lost across those same matches. This is not an average
+  of the per-match differentials — it's computed from the combined totals,
+  e.g. across 3 matches with runs/wickets of 100/1, 50/2 and 80/0 (us) vs
+  90/10, 40/5 and 70/10 (opponents): `(230/3) - (200/25) = 76.67 - 8.00 = +68.67`.
 
 ## Running it
 
