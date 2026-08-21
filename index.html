@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3d2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="R/W Calc">
+<title>Cricket R/W Calculator</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="app-header">
+  <h1>Cricket R/W Calculator</h1>
+  <p class="subtitle">Runs-per-wicket differential across up to 4 matches</p>
+</header>
+
+<main>
+  <section id="teams-section" class="card">
+    <h2>Teams</h2>
+    <div id="team-list" class="team-list"></div>
+  </section>
+
+  <section id="matches-section" class="card">
+    <div class="section-header">
+      <h2>Matches</h2>
+      <button id="add-match-btn" class="btn btn-primary">+ Add match</button>
+    </div>
+    <div id="match-list" class="match-list"></div>
+    <p id="match-limit-note" class="note hidden">Maximum of 4 matches reached.</p>
+  </section>
+
+  <section id="results-section" class="card">
+    <h2>Aggregate R/W Table</h2>
+    <div id="results-table"></div>
+  </section>
+
+  <div class="footer-actions">
+    <button id="reset-btn" class="btn btn-danger">Reset all</button>
+  </div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
