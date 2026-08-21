@@ -1,15 +1,13 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "cricket-rw-calc-state-v1";
+  var STORAGE_KEY = "cricket-rw-calc-state-v2";
   var MAX_TEAMS = 4;
-  var MAX_MATCHES = 4;
+  var MAX_MATCHES_PER_TEAM = 4;
 
   var teamListEl = document.getElementById("team-list");
-  var matchListEl = document.getElementById("match-list");
+  var teamMatchesContainer = document.getElementById("team-matches-container");
   var resultsEl = document.getElementById("results-table");
-  var addMatchBtn = document.getElementById("add-match-btn");
-  var matchLimitNote = document.getElementById("match-limit-note");
   var resetBtn = document.getElementById("reset-btn");
 
   var state = loadState();
@@ -17,22 +15,60 @@
   function defaultState() {
     var teams = [];
     for (var i = 0; i < MAX_TEAMS; i++) {
-      teams.push({ id: "t" + (i + 1), name: "Team " + (i + 1) });
+      teams.push({ id: "t" + (i + 1), name: "Team " + (i + 1), matches: [] });
     }
-    return { teams: teams, matches: [] };
+    return { teams: teams };
   }
 
   function loadState() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return defaultState();
+      if (!raw) return migrateOldState() || defaultState();
       var parsed = JSON.parse(raw);
-      if (!parsed || !Array.isArray(parsed.teams) || !Array.isArray(parsed.matches)) {
-        return defaultState();
-      }
+      if (!parsed || !Array.isArray(parsed.teams)) return defaultState();
+      parsed.teams.forEach(function (team) {
+        if (!Array.isArray(team.matches)) team.matches = [];
+      });
       return parsed;
     } catch (e) {
       return defaultState();
+    }
+  }
+
+  function migrateOldState() {
+    try {
+      var raw = localStorage.getItem("cricket-rw-calc-state-v1");
+      if (!raw) return null;
+      var old = JSON.parse(raw);
+      if (!old || !Array.isArray(old.teams)) return null;
+      var teams = old.teams.map(function (t) {
+        return { id: t.id, name: t.name, matches: [] };
+      });
+      (old.matches || []).forEach(function (m) {
+        var teamA = teams.filter(function (t) { return t.id === m.teamAId; })[0];
+        var teamB = teams.filter(function (t) { return t.id === m.teamBId; })[0];
+        if (teamA && teamB && teamA !== teamB) {
+          if (teamA.matches.length < MAX_MATCHES_PER_TEAM) {
+            teamA.matches.push({
+              id: "m" + Date.now() + Math.floor(Math.random() * 1000),
+              opponent: teamB.name,
+              runs: m.runsA, wickets: m.wicketsA,
+              oppRuns: m.runsB, oppWickets: m.wicketsB
+            });
+          }
+          if (teamB.matches.length < MAX_MATCHES_PER_TEAM) {
+            teamB.matches.push({
+              id: "m" + Date.now() + Math.floor(Math.random() * 1000) + 1,
+              opponent: teamA.name,
+              runs: m.runsB, wickets: m.wicketsB,
+              oppRuns: m.runsA, oppWickets: m.wicketsA
+            });
+          }
+        }
+      });
+      return { teams: teams };
+    } catch (e) {
+      return null;
     }
   }
 
@@ -41,31 +77,26 @@
   }
 
   function newMatch() {
-    var teamA = state.teams[0];
-    var teamB = state.teams[1] || state.teams[0];
     return {
       id: "m" + Date.now() + Math.floor(Math.random() * 1000),
-      teamAId: teamA.id,
-      teamBId: teamB.id,
-      runsA: 0,
-      wicketsA: 1,
-      runsB: 0,
-      wicketsB: 1
+      opponent: "",
+      runs: 0,
+      wickets: 0,
+      oppRuns: 0,
+      oppWickets: 0
     };
   }
 
-  function teamById(id) {
-    for (var i = 0; i < state.teams.length; i++) {
-      if (state.teams[i].id === id) return state.teams[i];
-    }
-    return null;
+  function clamp(num, min, max) {
+    return Math.min(max, Math.max(min, num));
   }
 
   function rw(runs, wickets) {
-    var w = Number(wickets);
     var r = Number(runs);
-    if (!w || w <= 0) return null;
-    return r / w;
+    var w = Number(wickets);
+    if (isNaN(r) || isNaN(w)) return null;
+    var divisor = w <= 0 ? 1 : w;
+    return r / divisor;
   }
 
   function formatSigned(num, decimals) {
@@ -74,9 +105,41 @@
     return sign + num.toFixed(decimals);
   }
 
+  function escapeHtml(str) {
+    var div = document.createElement("div");
+    div.textContent = str == null ? "" : String(str);
+    return div.innerHTML;
+  }
+
+  var TEAM_COLORS = ["#1e7a4c", "#2b6cb0", "#b3341c", "#a5730c"];
+  function teamColor(index) {
+    return TEAM_COLORS[index % TEAM_COLORS.length];
+  }
+
+  function matchDiff(match) {
+    var rwUs = rw(match.runs, match.wickets);
+    var rwOpp = rw(match.oppRuns, match.oppWickets);
+    if (rwUs === null || rwOpp === null) return null;
+    return rwUs - rwOpp;
+  }
+
+  function teamTotal(team) {
+    var played = 0;
+    var total = 0;
+    team.matches.forEach(function (match) {
+      var diff = matchDiff(match);
+      if (diff === null) return;
+      played += 1;
+      total += diff;
+    });
+    return { played: played, total: total };
+  }
+
+  // ---- Full render (structural changes: add/remove match, reset, first load) ----
+
   function render() {
     renderTeams();
-    renderMatches();
+    renderTeamMatches();
     renderResults();
     saveState();
   }
@@ -100,7 +163,7 @@
       input.addEventListener("input", function () {
         team.name = input.value;
         saveState();
-        renderMatches();
+        updateTeamHeading(team);
         renderResults();
       });
       row.appendChild(input);
@@ -109,33 +172,91 @@
     });
   }
 
-  var TEAM_COLORS = ["#1e7a4c", "#2b6cb0", "#b3341c", "#a5730c"];
-  function teamColor(index) {
-    return TEAM_COLORS[index % TEAM_COLORS.length];
+  function updateTeamHeading(team) {
+    var heading = teamMatchesContainer.querySelector(
+      '.team-match-card[data-team-id="' + team.id + '"] .team-heading'
+    );
+    if (heading) heading.textContent = team.name;
   }
 
-  function renderMatches() {
-    matchListEl.innerHTML = "";
+  function renderTeamMatches() {
+    teamMatchesContainer.innerHTML = "";
+    state.teams.forEach(function (team, teamIndex) {
+      teamMatchesContainer.appendChild(buildTeamMatchCard(team, teamIndex));
+    });
+  }
 
-    if (state.matches.length === 0) {
+  function buildTeamMatchCard(team, teamIndex) {
+    var card = document.createElement("section");
+    card.className = "card team-match-card";
+    card.setAttribute("data-team-id", team.id);
+
+    var header = document.createElement("div");
+    header.className = "team-match-header";
+
+    var dot = document.createElement("span");
+    dot.className = "team-color";
+    dot.style.background = teamColor(teamIndex);
+    header.appendChild(dot);
+
+    var heading = document.createElement("h2");
+    heading.className = "team-heading";
+    heading.textContent = team.name;
+    header.appendChild(heading);
+
+    var subtotal = document.createElement("span");
+    subtotal.className = "team-subtotal";
+    header.appendChild(subtotal);
+
+    card.appendChild(header);
+
+    var list = document.createElement("div");
+    list.className = "match-list";
+    team.matches.forEach(function (match, index) {
+      list.appendChild(buildMatchCard(team, match, index));
+    });
+    if (team.matches.length === 0) {
       var empty = document.createElement("p");
       empty.className = "empty-state";
-      empty.textContent = "No matches yet. Add a match to enter scores.";
-      matchListEl.appendChild(empty);
+      empty.textContent = "No matches logged yet.";
+      list.appendChild(empty);
     }
+    card.appendChild(list);
 
-    state.matches.forEach(function (match, index) {
-      matchListEl.appendChild(buildMatchCard(match, index));
+    var addBtn = document.createElement("button");
+    addBtn.className = "btn btn-primary add-match-btn";
+    addBtn.textContent = "+ Add match";
+    addBtn.disabled = team.matches.length >= MAX_MATCHES_PER_TEAM;
+    addBtn.addEventListener("click", function () {
+      if (team.matches.length >= MAX_MATCHES_PER_TEAM) return;
+      team.matches.push(newMatch());
+      render();
     });
+    card.appendChild(addBtn);
 
-    var atLimit = state.matches.length >= MAX_MATCHES;
-    addMatchBtn.disabled = atLimit;
-    matchLimitNote.classList.toggle("hidden", !atLimit);
+    var note = document.createElement("p");
+    note.className = "note" + (team.matches.length >= MAX_MATCHES_PER_TEAM ? "" : " hidden");
+    note.textContent = "Maximum of 4 matches reached for this team.";
+    card.appendChild(note);
+
+    updateTeamSubtotalEl(subtotal, team);
+
+    return card;
   }
 
-  function buildMatchCard(match, index) {
+  function updateTeamSubtotalEl(el, team) {
+    var t = teamTotal(team);
+    if (t.played === 0) {
+      el.textContent = "No results yet";
+    } else {
+      el.textContent = t.played + " played, total R/W " + formatSigned(t.total, 2);
+    }
+  }
+
+  function buildMatchCard(team, match, index) {
     var card = document.createElement("div");
     card.className = "match-card";
+    card.setAttribute("data-match-id", match.id);
 
     var header = document.createElement("div");
     header.className = "match-card-header";
@@ -148,138 +269,152 @@
     removeBtn.className = "btn-remove";
     removeBtn.textContent = "Remove";
     removeBtn.addEventListener("click", function () {
-      state.matches = state.matches.filter(function (m) {
+      team.matches = team.matches.filter(function (m) {
         return m.id !== match.id;
       });
       render();
     });
     header.appendChild(removeBtn);
-
     card.appendChild(header);
 
-    card.appendChild(buildTeamScoreRow(match, "A"));
-    card.appendChild(buildTeamScoreRow(match, "B"));
+    var opponentRow = document.createElement("div");
+    opponentRow.className = "opponent-row";
+    var oppLabel = document.createElement("span");
+    oppLabel.className = "field-label";
+    oppLabel.textContent = "Opponent";
+    opponentRow.appendChild(oppLabel);
+    var opponentInput = document.createElement("input");
+    opponentInput.type = "text";
+    opponentInput.placeholder = "Opponent name";
+    opponentInput.maxLength = 40;
+    opponentInput.value = match.opponent || "";
+    opponentInput.setAttribute("aria-label", "Opponent name");
+    opponentInput.addEventListener("input", function () {
+      match.opponent = opponentInput.value;
+      saveState();
+      refreshMatch(team, match);
+    });
+    opponentRow.appendChild(opponentInput);
+    card.appendChild(opponentRow);
+
+    card.appendChild(buildScorePairRow(team, match, "us", "Us"));
+    card.appendChild(buildScorePairRow(team, match, "opp", "Opp"));
 
     var diffEl = document.createElement("div");
     diffEl.className = "match-diff";
-    var teamA = teamById(match.teamAId);
-    var teamB = teamById(match.teamBId);
-    var rwA = rw(match.runsA, match.wicketsA);
-    var rwB = rw(match.runsB, match.wicketsB);
-
-    if (rwA === null || rwB === null || match.teamAId === match.teamBId) {
-      var warnMsg = match.teamAId === match.teamBId
-        ? "Select two different teams for this match."
-        : "Enter wickets (1-10) for both teams to calculate R/W.";
-      diffEl.textContent = warnMsg;
-    } else {
-      var diff = rwA - rwB;
-      diffEl.innerHTML =
-        (teamA ? teamA.name : "Team A") + " R/W: <span class=\"value\">" + rwA.toFixed(2) + "</span>" +
-        " &nbsp;|&nbsp; " +
-        (teamB ? teamB.name : "Team B") + " R/W: <span class=\"value\">" + rwB.toFixed(2) + "</span>" +
-        " &nbsp;|&nbsp; Differential: <span class=\"value " + (diff >= 0 ? "positive" : "negative") + "\">" + formatSigned(diff, 2) + "</span>";
-    }
     card.appendChild(diffEl);
+    updateDiffEl(diffEl, team, match);
 
     return card;
   }
 
-  function buildTeamScoreRow(match, side) {
+  function buildScorePairRow(team, match, side, label) {
     var row = document.createElement("div");
-    row.className = "team-score-row";
+    row.className = "score-pair-row";
 
-    var teamSelect = document.createElement("select");
-    state.teams.forEach(function (team) {
-      var opt = document.createElement("option");
-      opt.value = team.id;
-      opt.textContent = team.name;
-      teamSelect.appendChild(opt);
-    });
-    teamSelect.value = side === "A" ? match.teamAId : match.teamBId;
-    teamSelect.addEventListener("change", function () {
-      if (side === "A") match.teamAId = teamSelect.value;
-      else match.teamBId = teamSelect.value;
-      render();
-    });
+    var sideLabel = document.createElement("span");
+    sideLabel.className = "side-label";
+    sideLabel.textContent = label;
+    row.appendChild(sideLabel);
 
-    var runsInput = document.createElement("input");
-    runsInput.type = "number";
-    runsInput.min = "0";
-    runsInput.inputMode = "numeric";
-    runsInput.value = side === "A" ? match.runsA : match.runsB;
-    runsInput.setAttribute("aria-label", "Runs");
-    runsInput.addEventListener("input", function () {
-      var val = runsInput.value === "" ? 0 : Number(runsInput.value);
-      if (side === "A") match.runsA = val;
-      else match.runsB = val;
-      saveState();
-      renderMatches();
-      renderResults();
-    });
-
-    var wicketsInput = document.createElement("input");
-    wicketsInput.type = "number";
-    wicketsInput.min = "1";
-    wicketsInput.max = "10";
-    wicketsInput.inputMode = "numeric";
-    wicketsInput.value = side === "A" ? match.wicketsA : match.wicketsB;
-    wicketsInput.setAttribute("aria-label", "Wickets lost");
-    wicketsInput.addEventListener("input", function () {
-      var raw = wicketsInput.value;
-      var val = raw === "" ? "" : Math.max(1, Math.min(10, Number(raw)));
-      if (side === "A") match.wicketsA = val === "" ? "" : val;
-      else match.wicketsB = val === "" ? "" : val;
-      saveState();
-      renderMatches();
-      renderResults();
-    });
+    var runsField = side === "us" ? "runs" : "oppRuns";
+    var wicketsField = side === "us" ? "wickets" : "oppWickets";
 
     var runsWrap = document.createElement("div");
     var runsLabel = document.createElement("span");
     runsLabel.className = "field-label";
     runsLabel.textContent = "Runs";
     runsWrap.appendChild(runsLabel);
+    var runsInput = document.createElement("input");
+    runsInput.type = "number";
+    runsInput.min = "0";
+    runsInput.inputMode = "numeric";
+    runsInput.value = match[runsField];
+    runsInput.setAttribute("aria-label", label + " runs");
+    runsInput.addEventListener("input", function () {
+      var raw = runsInput.value;
+      match[runsField] = raw === "" ? "" : Number(raw);
+      saveState();
+      refreshMatch(team, match);
+    });
+    runsInput.addEventListener("blur", function () {
+      var val = runsInput.value === "" ? 0 : Math.max(0, Number(runsInput.value));
+      match[runsField] = val;
+      runsInput.value = val;
+      saveState();
+      refreshMatch(team, match);
+    });
     runsWrap.appendChild(runsInput);
+    row.appendChild(runsWrap);
 
     var wicketsWrap = document.createElement("div");
     var wicketsLabel = document.createElement("span");
     wicketsLabel.className = "field-label";
     wicketsLabel.textContent = "Wkts";
     wicketsWrap.appendChild(wicketsLabel);
+    var wicketsInput = document.createElement("input");
+    wicketsInput.type = "number";
+    wicketsInput.min = "0";
+    wicketsInput.max = "10";
+    wicketsInput.inputMode = "numeric";
+    wicketsInput.value = match[wicketsField];
+    wicketsInput.setAttribute("aria-label", label + " wickets lost");
+    wicketsInput.addEventListener("input", function () {
+      var raw = wicketsInput.value;
+      match[wicketsField] = raw === "" ? "" : Number(raw);
+      saveState();
+      refreshMatch(team, match);
+    });
+    wicketsInput.addEventListener("blur", function () {
+      var val = wicketsInput.value === "" ? 0 : clamp(Number(wicketsInput.value), 0, 10);
+      match[wicketsField] = val;
+      wicketsInput.value = val;
+      saveState();
+      refreshMatch(team, match);
+    });
     wicketsWrap.appendChild(wicketsInput);
-
-    row.appendChild(teamSelect);
-    row.appendChild(runsWrap);
     row.appendChild(wicketsWrap);
 
     return row;
   }
 
+  // ---- Lightweight refresh (keystroke-level changes: no DOM rebuild of inputs) ----
+
+  function refreshMatch(team, match) {
+    var card = teamMatchesContainer.querySelector('.match-card[data-match-id="' + match.id + '"]');
+    if (card) {
+      var diffEl = card.querySelector(".match-diff");
+      if (diffEl) updateDiffEl(diffEl, team, match);
+    }
+    var subtotalEl = teamMatchesContainer.querySelector(
+      '.team-match-card[data-team-id="' + team.id + '"] .team-subtotal'
+    );
+    if (subtotalEl) updateTeamSubtotalEl(subtotalEl, team);
+    renderResults();
+  }
+
+  function updateDiffEl(diffEl, team, match) {
+    var diff = matchDiff(match);
+    var opponentName = match.opponent && match.opponent.trim() ? match.opponent.trim() : "Opponent";
+    if (diff === null) {
+      diffEl.textContent = "Enter runs and wickets for both sides to calculate R/W.";
+      return;
+    }
+    var rwUs = rw(match.runs, match.wickets);
+    var rwOpp = rw(match.oppRuns, match.oppWickets);
+    diffEl.innerHTML =
+      "Us R/W: <span class=\"value\">" + rwUs.toFixed(2) + "</span>" +
+      " &nbsp;|&nbsp; " +
+      escapeHtml(opponentName) + " R/W: <span class=\"value\">" + rwOpp.toFixed(2) + "</span>" +
+      " &nbsp;|&nbsp; Differential: <span class=\"value " + (diff >= 0 ? "positive" : "negative") + "\">" + formatSigned(diff, 2) + "</span>";
+  }
+
+  // ---- Aggregate summary table ----
+
   function renderResults() {
-    var totals = {};
-    state.teams.forEach(function (team) {
-      totals[team.id] = { team: team, played: 0, total: 0 };
-    });
-
-    state.matches.forEach(function (match) {
-      if (match.teamAId === match.teamBId) return;
-      var rwA = rw(match.runsA, match.wicketsA);
-      var rwB = rw(match.runsB, match.wicketsB);
-      if (rwA === null || rwB === null) return;
-      var diff = rwA - rwB;
-      if (totals[match.teamAId]) {
-        totals[match.teamAId].played += 1;
-        totals[match.teamAId].total += diff;
-      }
-      if (totals[match.teamBId]) {
-        totals[match.teamBId].played += 1;
-        totals[match.teamBId].total += -diff;
-      }
-    });
-
-    var rows = Object.keys(totals).map(function (id) {
-      return totals[id];
+    var rows = state.teams.map(function (team) {
+      var t = teamTotal(team);
+      return { team: team, played: t.played, total: t.total };
     });
     rows.sort(function (a, b) {
       return b.total - a.total;
@@ -306,19 +441,8 @@
 
     resultsEl.innerHTML = "";
     resultsEl.appendChild(table);
+    saveState();
   }
-
-  function escapeHtml(str) {
-    var div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  addMatchBtn.addEventListener("click", function () {
-    if (state.matches.length >= MAX_MATCHES) return;
-    state.matches.push(newMatch());
-    render();
-  });
 
   resetBtn.addEventListener("click", function () {
     if (!confirm("Reset all teams and matches? This cannot be undone.")) return;

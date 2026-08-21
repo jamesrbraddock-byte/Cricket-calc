@@ -155,6 +155,61 @@ input[type="number"] {
   margin-bottom: 0;
 }
 
+.team-match-card {
+  margin-bottom: 16px;
+}
+
+.team-match-card:last-child {
+  margin-bottom: 0;
+}
+
+.team-match-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.team-match-header .team-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.team-match-header h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.team-subtotal {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.opponent-row {
+  margin-bottom: 10px;
+}
+
+.score-pair-row {
+  display: grid;
+  grid-template-columns: 46px 1fr 70px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.score-pair-row:last-of-type {
+  margin-bottom: 0;
+}
+
+.side-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .field-label {
   font-size: 0.7rem;
   text-transform: uppercase;

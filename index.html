@@ -17,7 +17,7 @@
 <body>
 <header class="app-header">
   <h1>Cricket R/W Calculator</h1>
-  <p class="subtitle">Runs-per-wicket differential across up to 4 matches</p>
+  <p class="subtitle">Runs-per-wicket differential across up to 4 teams, up to 4 matches each</p>
 </header>
 
 <main>
@@ -26,14 +26,7 @@
     <div id="team-list" class="team-list"></div>
   </section>
 
-  <section id="matches-section" class="card">
-    <div class="section-header">
-      <h2>Matches</h2>
-      <button id="add-match-btn" class="btn btn-primary">+ Add match</button>
-    </div>
-    <div id="match-list" class="match-list"></div>
-    <p id="match-limit-note" class="note hidden">Maximum of 4 matches reached.</p>
-  </section>
+  <div id="team-matches-container"></div>
 
   <section id="results-section" class="card">
     <h2>Aggregate R/W Table</h2>

@@ -1,23 +1,28 @@
 # Cricket R/W Calculator
 
 A mobile-friendly web app for tracking the runs-per-wicket (R/W) differential
-across up to 4 cricket matches and up to 4 teams.
+for up to 4 teams, each of which can log up to 4 matches. Matches are logged
+per team against a free-text opponent — the 4 teams don't need to have
+played each other.
 
 ## What it calculates
 
-For each match, R/W is `runs / wickets lost` for each team. The
-differential for a team in that match is its own R/W minus the opponent's
-R/W — e.g. Team A scores 100/1 and Team B scores 90/10:
+For each match, R/W is `runs / wickets lost` for each side. The
+differential for a match is the team's own R/W minus the opponent's R/W —
+e.g. a team scores 100/1 and the opponent scores 90/10:
 
 ```
-Team A R/W = 100 / 1  = 100.00
-Team B R/W =  90 / 10 =   9.00
-Differential (Team A) = 100.00 - 9.00 = +91.00
-Differential (Team B) =   9.00 - 100.00 = -91.00
+Us R/W       = 100 / 1  = 100.00
+Opponent R/W =  90 / 10 =   9.00
+Differential = 100.00 - 9.00 = +91.00
 ```
+
+If a side lost 0 wickets, the divisor is treated as 1 (rather than being
+undefined), so `100/0` is scored the same as `100/1`.
 
 The aggregate table sums each team's differential across every match it
-played, along with matches played and average R/W differential per match.
+has logged, along with matches played and average R/W differential per
+match.
 
 ## Running it
 
@@ -45,8 +50,8 @@ Then open `http://localhost:8080` in a browser.
 
 ## Notes / limits
 
-- Up to 4 teams and up to 4 matches, matching the original spec.
-- Wickets lost must be between 1 and 10 for the R/W calculation to be
-  defined (dividing by 0 wickets is mathematically undefined).
+- Up to 4 teams, each with up to 4 matches logged against free-text
+  opponents.
+- Wickets lost per innings is 0–10.
 - All data is stored locally in the browser only — nothing is sent to a
   server.
