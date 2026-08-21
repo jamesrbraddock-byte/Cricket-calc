@@ -170,6 +170,7 @@
         team.name = input.value;
         saveState();
         updateTeamHeading(team);
+        updateTeamMatchLabels(team);
         renderResults();
       });
       row.appendChild(input);
@@ -183,6 +184,21 @@
       '.team-match-card[data-team-id="' + team.id + '"] .team-heading'
     );
     if (heading) heading.textContent = team.name;
+  }
+
+  function updateTeamMatchLabels(team) {
+    var teamLabel = team.name && team.name.trim() ? team.name.trim() : "Team";
+    var card = teamMatchesContainer.querySelector('.team-match-card[data-team-id="' + team.id + '"]');
+    if (!card) return;
+    var matchCards = card.querySelectorAll(".match-card");
+    matchCards.forEach(function (matchCard, idx) {
+      var match = team.matches[idx];
+      if (!match) return;
+      var usLabelEl = matchCard.querySelector(".score-pair-row:first-of-type .side-label");
+      if (usLabelEl) usLabelEl.textContent = teamLabel;
+      var diffEl = matchCard.querySelector(".match-diff");
+      if (diffEl) updateDiffEl(diffEl, team, match);
+    });
   }
 
   function renderTeamMatches() {
@@ -303,7 +319,8 @@
     opponentRow.appendChild(opponentInput);
     card.appendChild(opponentRow);
 
-    card.appendChild(buildScorePairRow(team, match, "us", "Us"));
+    var teamLabel = team.name && team.name.trim() ? team.name.trim() : "Team";
+    card.appendChild(buildScorePairRow(team, match, "us", teamLabel));
     card.appendChild(buildScorePairRow(team, match, "opp", "Opp"));
 
     var diffEl = document.createElement("div");
@@ -401,6 +418,7 @@
 
   function updateDiffEl(diffEl, team, match) {
     var diff = matchDiff(match);
+    var teamLabel = team.name && team.name.trim() ? team.name.trim() : "Team";
     var opponentName = match.opponent && match.opponent.trim() ? match.opponent.trim() : "Opponent";
     if (diff === null) {
       diffEl.textContent = "Enter runs and wickets for both sides to calculate R/W.";
@@ -409,7 +427,7 @@
     var rwUs = rw(match.runs, match.wickets);
     var rwOpp = rw(match.oppRuns, match.oppWickets);
     diffEl.innerHTML =
-      "Us R/W: <span class=\"value\">" + rwUs.toFixed(2) + "</span>" +
+      escapeHtml(teamLabel) + " R/W: <span class=\"value\">" + rwUs.toFixed(2) + "</span>" +
       " &nbsp;|&nbsp; " +
       escapeHtml(opponentName) + " R/W: <span class=\"value\">" + rwOpp.toFixed(2) + "</span>" +
       " &nbsp;|&nbsp; Differential: <span class=\"value " + (diff >= 0 ? "positive" : "negative") + "\">" + formatSigned(diff, 2) + "</span>";
@@ -420,25 +438,24 @@
   function renderResults() {
     var rows = state.teams.map(function (team) {
       var t = teamTotal(team);
-      return { team: team, played: t.played, total: t.total, avg: t.avg };
+      return { team: team, played: t.played, avg: t.avg };
     });
     rows.sort(function (a, b) {
-      return b.total - a.total;
+      return (b.avg || 0) - (a.avg || 0);
     });
 
     var table = document.createElement("table");
     table.className = "results-table-el";
     table.innerHTML =
-      "<thead><tr><th>Team</th><th class=\"num\">Played</th><th class=\"num\">Total R/W</th><th class=\"num\">Avg R/W</th></tr></thead>";
+      "<thead><tr><th>Team</th><th class=\"num\">Played</th><th class=\"num\">R/W</th></tr></thead>";
 
     var tbody = document.createElement("tbody");
     rows.forEach(function (row) {
       var tr = document.createElement("tr");
-      var cls = row.played === 0 ? "" : (row.total >= 0 ? "positive" : "negative");
+      var cls = row.played === 0 ? "" : (row.avg >= 0 ? "positive" : "negative");
       tr.innerHTML =
         "<td>" + escapeHtml(row.team.name) + "</td>" +
         "<td class=\"num\">" + row.played + "</td>" +
-        "<td class=\"num " + cls + "\">" + (row.played > 0 ? formatSigned(row.total, 2) : "-") + "</td>" +
         "<td class=\"num " + cls + "\">" + (row.avg !== null ? formatSigned(row.avg, 2) : "-") + "</td>";
       tbody.appendChild(tr);
     });

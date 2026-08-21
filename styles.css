@@ -194,7 +194,7 @@ input[type="number"] {
 
 .score-pair-row {
   display: grid;
-  grid-template-columns: 46px 1fr 70px;
+  grid-template-columns: minmax(0, 84px) 1fr 70px;
   gap: 8px;
   align-items: center;
   margin-bottom: 8px;
@@ -208,6 +208,9 @@ input[type="number"] {
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .field-label {
